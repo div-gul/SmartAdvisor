@@ -10,6 +10,8 @@ import {
   Sun,
   User,
 } from "lucide-react";
+import { sendChatMessage, apiLogin, apiRegister, apiUpdateProfile } from "./api";
+import type { ChatResponse, PersonaProfile, NextBestAction, AgentDecisionInfo, AuthResponse } from "./api";
 
 type Screen = "landing" | "auth" | "products" | "onboarding" | "match" | "profile" | "admin";
 type Role = "guest" | "user" | "admin";
@@ -322,15 +324,47 @@ function AuthPage({
   theme,
   mode,
   onModeChange,
-  onSubmit,
+  onAuthSuccess,
 }: {
   theme: ThemeMode;
   mode: AuthMode;
   onModeChange: (mode: AuthMode) => void;
-  onSubmit: (role: "user" | "admin") => void;
+  onAuthSuccess: (user: AuthResponse) => void;
 }) {
   const c = useColors(theme);
   const [selectedRole, setSelectedRole] = useState<"user" | "admin">("user");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setLoading(true);
+
+    try {
+      if (!email.trim() || !password.trim()) {
+        throw new Error("Email and password are required");
+      }
+      
+      let res: AuthResponse;
+      if (mode === "register") {
+        if (!name.trim()) {
+          throw new Error("Full name is required to register");
+        }
+        res = await apiRegister(name, email, password, selectedRole);
+      } else {
+        res = await apiLogin(email, password);
+      }
+      onAuthSuccess(res);
+    } catch (err: any) {
+      setError(err.message || "Authentication failed. Please verify your inputs.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <main className="min-h-screen px-4 py-12" style={{ background: c.bg }}>
@@ -341,14 +375,17 @@ function AuthPage({
               {mode === "login" ? "Login" : "Register"}
             </h1>
             <p className="mt-2 text-sm" style={{ color: c.subtext }}>
-              Choose whether you are entering as a customer or as an admin. This is dummy frontend auth only.
+              Enter your credentials to manage your banking profile and chat with the AI Advisor.
             </p>
           </div>
           <div className="flex rounded-full border p-1" style={{ borderColor: c.border, background: c.muted }}>
             {(["login", "register"] as AuthMode[]).map((item) => (
               <button
                 key={item}
-                onClick={() => onModeChange(item)}
+                onClick={() => {
+                  setError(null);
+                  onModeChange(item);
+                }}
                 className="rounded-full px-4 py-2 text-sm font-bold capitalize"
                 style={{ background: mode === item ? c.raised : "transparent", color: mode === item ? c.primary : c.subtext }}
               >
@@ -385,29 +422,63 @@ function AuthPage({
           <form
             className="rounded-2xl border p-5"
             style={{ background: c.raised, borderColor: c.border }}
-            onSubmit={(event) => {
-              event.preventDefault();
-              onSubmit(selectedRole);
-            }}
+            onSubmit={handleSubmit}
           >
-            <label className="mb-2 block text-sm font-semibold" style={{ color: c.text }}>
-              Email
-            </label>
-            <input className="mb-4 w-full rounded-xl border px-4 py-3 outline-none" style={{ background: c.muted, borderColor: c.border, color: c.text }} placeholder="name@example.com" />
-            <label className="mb-2 block text-sm font-semibold" style={{ color: c.text }}>
-              Password
-            </label>
-            <input className="mb-4 w-full rounded-xl border px-4 py-3 outline-none" style={{ background: c.muted, borderColor: c.border, color: c.text }} placeholder="Enter any dummy password" type="password" />
+            {error && (
+              <div className="mb-4 rounded-xl p-3 text-xs font-bold text-red-500 bg-red-50 border border-red-200">
+                {error}
+              </div>
+            )}
+            
             {mode === "register" && (
               <>
                 <label className="mb-2 block text-sm font-semibold" style={{ color: c.text }}>
                   Full name
                 </label>
-                <input className="mb-4 w-full rounded-xl border px-4 py-3 outline-none" style={{ background: c.muted, borderColor: c.border, color: c.text }} placeholder="Your name" />
+                <input 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="mb-4 w-full rounded-xl border px-4 py-3 outline-none" 
+                  style={{ background: c.muted, borderColor: c.border, color: c.text }} 
+                  placeholder="Your name" 
+                  required
+                />
               </>
             )}
-            <button className="mt-2 w-full rounded-full px-5 py-3 text-sm font-bold text-white" style={{ background: "#005B65" }}>
-              Continue as {selectedRole}
+
+            <label className="mb-2 block text-sm font-semibold" style={{ color: c.text }}>
+              Email
+            </label>
+            <input 
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="mb-4 w-full rounded-xl border px-4 py-3 outline-none" 
+              style={{ background: c.muted, borderColor: c.border, color: c.text }} 
+              placeholder="name@example.com" 
+              required
+            />
+            
+            <label className="mb-2 block text-sm font-semibold" style={{ color: c.text }}>
+              Password
+            </label>
+            <input 
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="mb-4 w-full rounded-xl border px-4 py-3 outline-none" 
+              style={{ background: c.muted, borderColor: c.border, color: c.text }} 
+              placeholder="Enter your password" 
+              required
+            />
+            
+            <button 
+              type="submit"
+              disabled={loading}
+              className="mt-2 w-full rounded-full px-5 py-3 text-sm font-bold text-white transition hover:scale-[1.01]" 
+              style={{ background: loading ? "#BEC8CA" : "#005B65" }}
+            >
+              {loading ? "Authenticating..." : `Continue as ${selectedRole}`}
             </button>
           </form>
         </div>
@@ -715,24 +786,73 @@ function MatchPage({
 function ProfilePage({
   theme,
   profile,
+  userId,
   onProfileChange,
 }: {
   theme: ThemeMode;
   profile: Profile;
+  userId: string | null;
   onProfileChange: (profile: Profile) => void;
 }) {
   const c = useColors(theme);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   const fields = Object.keys(profile) as (keyof Profile)[];
+
+  const handleSaveProfile = async () => {
+    if (!userId) {
+      alert("Please login first to save your profile details to the database.");
+      return;
+    }
+    setIsSaving(true);
+    setSaveSuccess(false);
+    try {
+      await apiUpdateProfile({
+        user_id: userId,
+        name: profile.fullName,
+        phone: profile.phone,
+        age: profile.age,
+        occupation: profile.occupation,
+        income: profile.income,
+        goals: profile.goals,
+        risk_tolerance: profile.risk,
+        address: profile.address,
+        pan: profile.pan
+      });
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err: any) {
+      console.error("Save profile error:", err);
+      alert(err.message || "Failed to save profile details");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <main className="min-h-screen px-4 py-10 md:px-6" style={{ background: c.bg }}>
       <section className="mx-auto max-w-[960px] rounded-2xl border p-5 md:p-8" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
-        <h1 className="text-3xl font-bold" style={{ color: c.text }}>
-          Customer Profile
-        </h1>
-        <p className="mt-2 text-sm leading-6" style={{ color: c.subtext }}>
-          Dummy profile details are saved in frontend state and used by the onboarding AI to prefill application fields.
-        </p>
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center mb-6">
+          <div>
+            <h1 className="text-3xl font-bold" style={{ color: c.text }}>
+              Customer Profile
+            </h1>
+            <p className="mt-2 text-sm leading-6" style={{ color: c.subtext }}>
+              Your profile details are stored securely in the SQLite database and used by the multi-agent AI system.
+            </p>
+          </div>
+          {userId && (
+            <button 
+              onClick={handleSaveProfile}
+              disabled={isSaving}
+              className="rounded-full px-6 py-2.5 text-sm font-bold text-white transition hover:scale-105"
+              style={{ background: saveSuccess ? "#10B981" : "#005B65" }}
+            >
+              {isSaving ? "Saving..." : saveSuccess ? "Saved Successfully!" : "Save Profile Details"}
+            </button>
+          )}
+        </div>
+        
         <div className="mt-7 grid gap-4 md:grid-cols-2">
           {fields.map((field) => (
             <label key={field} className="block">
@@ -765,133 +885,379 @@ function OnboardingPage({
   onNavigate: (screen: Screen) => void;
 }) {
   const c = useColors(theme);
-  const [messages, setMessages] = useState<ChatMessage[]>([
+  const [messages, setMessages] = useState<any[]>([
     {
       role: "ai",
-      text: `Hi ${profile.fullName.split(" ")[0] || "there"}. I have your saved profile, so I will only ask for missing details and product preferences.`,
+      text: "Initializing Smart Advisor AI Agent network...",
       time: now(),
-    },
-    {
-      role: "ai",
-      text: selectedProduct
-        ? `${selectedProduct.name} is a good product to discuss. I would compare it against your goals and suggest the next best action.`
-        : "Based on your profile, I would start with Smart Savings for liquidity and a Mutual Fund SIP for long-term goals.",
-      time: now(),
-    },
+      agent_name: "strategy",
+    }
   ]);
   const [input, setInput] = useState("");
+  const [leadId, setLeadId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [leadScore, setLeadScore] = useState(20);
+  const [leadTier, setLeadTier] = useState("Cold");
+  const [persona, setPersona] = useState<PersonaProfile | null>(null);
+  const [nba, setNba] = useState<NextBestAction | null>(null);
+  const [decision, setDecision] = useState<AgentDecisionInfo | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [messages, isLoading]);
 
-  const sendMessage = (text: string) => {
-    setMessages((m) => [...m, { role: "user", text, time: now() }]);
+  // Initialize Conversation with User Profile (runs research agent)
+  useEffect(() => {
+    const initializeChat = async () => {
+      setIsLoading(true);
+      try {
+        const userInfo = {
+          name: profile.fullName || "Priya Mehta",
+          email: profile.email || "priya.mehta@example.com",
+          phone: profile.phone || "+91 98765 43210",
+          occupation: profile.occupation || "Salaried professional",
+          income: profile.income || "Rs 12 lakh p.a.",
+          goals: profile.goals || "Emergency fund, savings",
+          age: profile.age || "31",
+          risk_tolerance: profile.risk || "Moderate"
+        };
+        
+        const welcomeMsg = selectedProduct 
+          ? `Hi, I am interested in exploring ${selectedProduct.name}.` 
+          : "Hello, I want to start my banking onboarding journey.";
+
+        const res = await sendChatMessage({
+          user_message: welcomeMsg,
+          user_info: userInfo
+        });
+
+        setLeadId(res.lead_id);
+        setLeadScore(res.lead_score);
+        setLeadTier(res.lead_tier);
+        setNba(res.next_best_action || null);
+        setPersona(res.persona || null);
+        setDecision(res.agent_decision || null);
+        
+        setMessages([
+          { role: "user", text: welcomeMsg, time: now() },
+          { role: "ai", text: res.response, time: now(), agent_name: res.agent_used }
+        ]);
+      } catch (err) {
+        console.error("Initialization error:", err);
+        setMessages([
+          { 
+            role: "ai", 
+            text: "Welcome! I'm ready to assist you. To get started, what product or banking goals can I help you with?", 
+            time: now(), 
+            agent_name: "qualification" 
+          }
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    initializeChat();
+  }, [profile, selectedProduct]);
+
+  const sendMessage = async (text: string) => {
+    if (!text.trim()) return;
     setInput("");
-    setTimeout(() => {
+    setMessages((m) => [...m, { role: "user", text, time: now() }]);
+    setIsLoading(true);
+
+    try {
+      const res = await sendChatMessage({
+        lead_id: leadId || undefined,
+        user_message: text,
+        user_info: {
+          name: profile.fullName,
+          email: profile.email,
+          phone: profile.phone,
+          occupation: profile.occupation,
+          income: profile.income,
+          goals: profile.goals,
+          age: profile.age,
+          risk_tolerance: profile.risk
+        }
+      });
+
+      setLeadScore(res.lead_score);
+      setLeadTier(res.lead_tier);
+      setNba(res.next_best_action || null);
+      setPersona(res.persona || null);
+      setDecision(res.agent_decision || null);
+
       setMessages((m) => [
         ...m,
-        {
-          role: "ai",
-          text: "Dummy recommendation: keep the application simple, use your saved KYC details, and choose the product with the highest match score before submitting.",
-          time: now(),
-        },
+        { role: "ai", text: res.response, time: now(), agent_name: res.agent_used }
       ]);
-    }, 350);
+    } catch (err) {
+      console.error("API Error sending message:", err);
+      // Fallback response
+      setTimeout(() => {
+        setMessages((m) => [
+          ...m,
+          { 
+            role: "ai", 
+            text: "I understand. Let's look at the options. Could you tell me more about your preference?", 
+            time: now(), 
+            agent_name: "sales" 
+          }
+        ]);
+        setIsLoading(false);
+      }, 500);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const formRows: [string, string][] = [
-    ["Full name", profile.fullName],
-    ["Phone", profile.phone],
-    ["PAN", profile.pan],
-    ["Address", profile.address],
-    ["Occupation", profile.occupation],
-    ["Income", profile.income],
-    ["Goal", profile.goals],
-    ["Product under discussion", selectedProduct?.name || "SBI Smart Savings and SIP"],
-  ];
+  const getAgentBadgeColor = (agent: string) => {
+    switch (agent) {
+      case "research": return { bg: "#E0F2FE", text: "#0369A1", label: "Research Agent" };
+      case "qualification": return { bg: "#FEF3C7", text: "#D97706", label: "Qualification Agent" };
+      case "strategy": return { bg: "#F3E8FF", text: "#7E22CE", label: "Strategy Supervisor" };
+      case "sales": return { bg: "#DCFCE7", text: "#15803D", label: "Sales Agent" };
+      case "followup": return { bg: "#FEE2E2", text: "#B91C1C", label: "Follow-Up Agent" };
+      default: return { bg: "#F3F4F6", text: "#374151", label: "Agent" };
+    }
+  };
+
+  const getTierColor = (tier: string) => {
+    switch (tier) {
+      case "Hot": return "#10B981";
+      case "Warm": return "#F59E0B";
+      case "Cold": return "#3B82F6";
+      default: return "#9CA3AF";
+    }
+  };
 
   return (
     <main className="min-h-screen px-4 py-10 md:px-6" style={{ background: c.bg }}>
-      <div className="mx-auto max-w-[1180px]">
-        <div className="mb-6">
-          <p className="text-sm font-bold uppercase tracking-widest" style={{ color: c.primary }}>
-            Conversational onboarding
-          </p>
-          <h1 className="mt-2 text-3xl font-bold" style={{ color: c.text }}>
-            AI guidance with profile-aware form filling
-          </h1>
+      <div className="mx-auto max-w-[1240px]">
+        {/* Header */}
+        <div className="mb-6 flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-widest" style={{ color: c.primary }}>
+              Active AI Orchestration
+            </p>
+            <h1 className="mt-2 text-3xl font-bold" style={{ color: c.text }}>
+              Multi-Agent Advisory Center
+            </h1>
+          </div>
+          <div className="flex gap-3">
+            <div className="rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-wide flex items-center gap-2" style={{ borderColor: c.border, background: c.surface }}>
+              <span className="h-2 w-2 rounded-full animate-ping" style={{ background: getTierColor(leadTier) }} />
+              Lead Status: <span style={{ color: getTierColor(leadTier) }}>{leadTier}</span>
+            </div>
+            <div className="rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-wide flex items-center gap-2" style={{ borderColor: c.border, background: c.surface, color: c.primary }}>
+              Score: {leadScore}/100
+            </div>
+          </div>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="flex min-h-[560px] flex-col rounded-2xl border" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
-            <div className="border-b p-5" style={{ borderColor: c.border }}>
-              <h2 className="font-bold" style={{ color: c.text }}>
-                Advisor conversation
-              </h2>
-              <p className="text-xs" style={{ color: c.faint }}>
-                Dummy conversation for product guidance
-              </p>
+        <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+          {/* Chat Panel */}
+          <section className="flex min-h-[580px] max-h-[640px] flex-col rounded-2xl border" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
+            <div className="border-b p-4 flex items-center justify-between" style={{ borderColor: c.border }}>
+              <div>
+                <h2 className="font-bold" style={{ color: c.text }}>
+                  SBI Customer Assistant
+                </h2>
+                <p className="text-xs" style={{ color: c.faint }}>
+                  Orchestrated by Strategy Supervisor Agent
+                </p>
+              </div>
+              {decision && (
+                <div className="text-xs rounded-full px-3 py-1 flex items-center gap-1.5 font-semibold" style={{ background: c.primarySoft, color: c.primary }}>
+                  Active Agent: <span className="font-bold capitalize">{decision.next_agent}</span>
+                </div>
+              )}
             </div>
-            <div className="flex-1 space-y-4 overflow-y-auto p-5">
-              {messages.map((message, index) => (
-                <div key={`${message.text}-${index}`} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <div className="max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-6" style={{ background: message.role === "user" ? "#005B65" : c.raised, color: message.role === "user" ? "#fff" : c.text, border: message.role === "ai" ? `1px solid ${c.border}` : "none" }}>
-                    {message.text}
+            
+            {/* Message Area */}
+            <div className="flex-1 space-y-4 overflow-y-auto p-4">
+              {messages.map((message, index) => {
+                const badge = message.agent_name ? getAgentBadgeColor(message.agent_name) : null;
+                const isUser = message.role === "user";
+                return (
+                  <div key={index} className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+                    {!isUser && badge && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 tracking-wider uppercase" style={{ background: badge.bg, color: badge.text }}>
+                        {badge.label}
+                      </span>
+                    )}
+                    <div 
+                      className="max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6" 
+                      style={{ 
+                        background: isUser ? "#005B65" : c.raised, 
+                        color: isUser ? "#fff" : c.text, 
+                        border: isUser ? "none" : `1px solid ${c.border}`,
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+                      }}
+                    >
+                      {message.text}
+                    </div>
+                  </div>
+                );
+              })}
+              {isLoading && (
+                <div className="flex flex-col items-start">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full mb-1 tracking-wider uppercase animate-pulse" style={{ background: c.primarySoft, color: c.primary }}>
+                    Thinking...
+                  </span>
+                  <div className="rounded-2xl px-5 py-3.5 border flex gap-1.5 items-center" style={{ background: c.raised, borderColor: c.border }}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: "300ms" }} />
                   </div>
                 </div>
-              ))}
+              )}
               <div ref={chatEndRef} />
             </div>
+
+            {/* Input Bar */}
             <div className="border-t p-4" style={{ borderColor: c.border }}>
               <div className="flex gap-2">
                 <input
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" && input.trim()) sendMessage(input.trim());
+                    if (event.key === "Enter" && input.trim() && !isLoading) sendMessage(input.trim());
                   }}
-                  className="min-w-0 flex-1 rounded-full border px-4 py-3 text-sm outline-none"
-                  placeholder="Ask what product you should choose..."
+                  disabled={isLoading}
+                  className="min-w-0 flex-1 rounded-full border px-5 py-3 text-sm outline-none transition"
+                  placeholder="Tell me your budget, timeline, or ask banking questions..."
                   style={{ background: c.muted, borderColor: c.border, color: c.text }}
                 />
-                <button onClick={() => input.trim() && sendMessage(input.trim())} className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-white" style={{ background: "#005B65" }}>
+                <button 
+                  onClick={() => input.trim() && !isLoading && sendMessage(input.trim())}
+                  disabled={isLoading}
+                  className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-white transition hover:scale-105" 
+                  style={{ background: "#005B65" }}
+                >
                   <Send size={18} />
                 </button>
               </div>
             </div>
           </section>
 
-          <section className="rounded-2xl border p-5" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
-            <div className="mb-5 flex items-center gap-3">
-              <span className="grid h-10 w-10 place-items-center rounded-full" style={{ background: c.primarySoft, color: c.primary }}>
-                <ClipboardList size={18} />
-              </span>
-              <div>
-                <h2 className="font-bold" style={{ color: c.text }}>
-                  Live application draft
-                </h2>
-                <p className="text-xs" style={{ color: c.faint }}>
-                  Filled from saved profile and conversation context
-                </p>
+          {/* Intelligence Dashboard Panel */}
+          <section className="space-y-4">
+            {/* 1. Lead Score Card */}
+            <div className="rounded-2xl border p-5" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
+              <h3 className="text-sm font-bold uppercase tracking-wider mb-3" style={{ color: c.primary }}>
+                Lead Scoring (ML telemetry)
+              </h3>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-3xl font-extrabold" style={{ color: c.text }}>{leadScore}%</span>
+                <span className="text-xs font-bold uppercase px-3 py-1 rounded-full" style={{ background: getTierColor(leadTier) + "22", color: getTierColor(leadTier) }}>
+                  {leadTier} Lead
+                </span>
               </div>
+              <div className="h-2.5 w-full rounded-full overflow-hidden mb-3" style={{ background: c.muted }}>
+                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${leadScore}%`, background: getTierColor(leadTier) }} />
+              </div>
+              <p className="text-xs leading-5" style={{ color: c.subtext }}>
+                Based on active conversation factors, profile parameters, and interest specificity. Hot tier (&gt;70%) triggers automated CRM handoff.
+              </p>
             </div>
-            <div className="space-y-3">
-              {formRows.map(([label, value]) => (
-                <div key={label}>
-                  <div className="mb-1 text-xs font-bold uppercase tracking-wide" style={{ color: c.faint }}>
-                    {label}
+
+            {/* 2. Persona Profile Card */}
+            {persona && (
+              <div className="rounded-2xl border p-5 animate-fade-in" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-bold uppercase tracking-wider" style={{ color: c.primary }}>
+                    Customer Persona Profile
+                  </h3>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase" style={{ background: c.primarySoft, color: c.primary }}>
+                    Deduced by ResearchAgent
+                  </span>
+                </div>
+                <div className="mb-4">
+                  <div className="text-xl font-bold" style={{ color: c.text }}>{persona.persona}</div>
+                  <div className="text-xs font-semibold capitalize" style={{ color: c.faint }}>Style: {persona.communication_style} | Budget: {persona.budget}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 mb-4">
+                  <div className="rounded-xl p-3" style={{ background: c.muted }}>
+                    <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Target Need</div>
+                    <div className="text-xs font-bold capitalize" style={{ color: c.text }}>{persona.intent.replace('_', ' ')}</div>
                   </div>
-                  <div className="rounded-xl border px-4 py-3 text-sm" style={{ background: c.muted, borderColor: c.border, color: value ? c.text : c.faint }}>
-                    {value || "Missing from profile"}
+                  <div className="rounded-xl p-3" style={{ background: c.muted }}>
+                    <div className="text-[10px] font-bold uppercase text-slate-400 mb-1">Risk Profile</div>
+                    <div className="text-xs font-bold capitalize" style={{ color: c.text }}>{persona.risk_tolerance} Risk</div>
                   </div>
                 </div>
-              ))}
-            </div>
-            <button onClick={() => onNavigate("match")} className="mt-6 w-full rounded-full px-5 py-3 text-sm font-bold text-white" style={{ background: "#005B65" }}>
-              Check My Match
-            </button>
+                <div className="space-y-2">
+                  <div className="text-xs font-bold" style={{ color: c.subtext }}>Likely Suitable Products:</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {persona.likely_products.map((p, idx) => (
+                      <span key={idx} className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: c.primarySoft, color: c.primary }}>
+                        {p}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 3. Strategy Supervisor Node */}
+            {decision && (
+              <div className="rounded-2xl border p-5" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
+                <h3 className="text-sm font-bold uppercase tracking-wider mb-3" style={{ color: c.primary }}>
+                  Supervisor Routing Trace
+                </h3>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-400">Decided Node:</span>
+                    <span className="font-extrabold capitalize text-indigo-500">{decision.next_agent} agent</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-400">Confidence Score:</span>
+                    <span className="font-extrabold" style={{ color: c.text }}>{Math.round(decision.confidence * 100)}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-slate-400">Funnel Phase:</span>
+                    <span className="font-bold uppercase" style={{ color: c.primary }}>{decision.conversation_phase}</span>
+                  </div>
+                  <div className="rounded-xl p-3 text-xs leading-5 border border-dashed" style={{ background: c.muted, borderColor: c.border, color: c.subtext }}>
+                    <strong className="block mb-1 text-slate-500">Supervisor Rationale:</strong>
+                    "{decision.reason}"
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 4. Next Best Action Card */}
+            {nba && (
+              <div className="rounded-2xl border p-5 text-white" style={{ background: "linear-gradient(135deg, #005B65, #007C8A)", borderColor: "transparent", boxShadow: c.shadow }}>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-bold uppercase tracking-widest text-teal-100">
+                    Next Best Action Recommendation
+                  </h3>
+                  <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-amber-400 text-teal-950">
+                    {nba.priority} Priority
+                  </span>
+                </div>
+                <div className="text-lg font-bold mb-1">{nba.action}</div>
+                <p className="text-xs text-teal-100 mb-4">{nba.details || "Recommended follow up step to accelerate conversion."}</p>
+                <button 
+                  onClick={() => {
+                    if (nba.action === "Schedule Demo") {
+                      alert("Demo session booking trigger fired!");
+                    } else if (nba.action === "Send Discount") {
+                      alert("Promo application voucher processed!");
+                    } else {
+                      alert("Filing transaction request initiated!");
+                    }
+                  }}
+                  className="w-full rounded-full py-2.5 text-xs font-extrabold text-teal-950 bg-white hover:bg-teal-50 transition tracking-wide uppercase"
+                >
+                  Execute: {nba.action}
+                </button>
+              </div>
+            )}
           </section>
         </div>
       </div>
@@ -945,7 +1311,8 @@ export default function App() {
   const [role, setRole] = useState<Role>("guest");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [theme, setTheme] = useState<ThemeMode>("light");
-  const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
+  const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
+  const [userId, setUserId] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(PRODUCTS[0]);
 
   const navigate = (nextScreen: Screen) => {
@@ -981,6 +1348,7 @@ export default function App() {
         onNavigate={navigate}
         onLogout={() => {
           setRole("guest");
+          setUserId(null);
           setProfile(EMPTY_PROFILE);
           setScreen("landing");
         }}
@@ -992,16 +1360,28 @@ export default function App() {
           theme={theme}
           mode={authMode}
           onModeChange={setAuthMode}
-          onSubmit={(nextRole) => {
-            setRole(nextRole);
-            setProfile(nextRole === "user" ? DEFAULT_PROFILE : EMPTY_PROFILE);
-            setScreen(nextRole === "admin" ? "admin" : "profile");
+          onAuthSuccess={(user) => {
+            setRole(user.role as Role);
+            setUserId(user.user_id);
+            setProfile({
+              fullName: user.name,
+              email: user.email,
+              phone: user.phone || "",
+              age: user.age || "",
+              occupation: user.occupation || "",
+              income: user.income || "",
+              goals: user.goals || "",
+              risk: user.risk_tolerance || "",
+              address: user.address || "",
+              pan: user.pan || ""
+            });
+            setScreen(user.role === "admin" ? "admin" : "profile");
           }}
         />
       )}
       {screen === "products" && <ProductsPage theme={theme} role={role} selectedProduct={selectedProduct} onSelectProduct={setSelectedProduct} onNavigate={navigate} />}
       {screen === "match" && <MatchPage theme={theme} product={selectedProduct} profile={profile} onNavigate={navigate} />}
-      {screen === "profile" && <ProfilePage theme={theme} profile={profile} onProfileChange={setProfile} />}
+      {screen === "profile" && <ProfilePage theme={theme} profile={profile} userId={userId} onProfileChange={setProfile} />}
       {screen === "onboarding" && <OnboardingPage theme={theme} profile={profile} selectedProduct={selectedProduct} onNavigate={navigate} />}
       {screen === "admin" && <AdminPage theme={theme} />}
     </div>
