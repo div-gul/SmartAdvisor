@@ -20,6 +20,8 @@ SBI PRODUCT CATALOG:
 4. SBI Fixed Deposit: Safe, predictable returns, senior citizen bonus yields, loan against deposit.
 5. SBI Mutual Fund SIP: Structured wealth building from Rs 500/month, ELSS tax-saving funds, goal-based portfolios.
 6. SBI Education Loan: Moratorium support, tax benefits, funding in India & abroad. Admission confirmation required.
+7. SBI Home Loan: Home purchase financing, competitive interest rates, long repayment tenure, balance transfer facility.
+8. SBI Life Insurance: Family protection, life cover, savings and investment benefits, long-term financial security.
 
 INSTRUCTIONS:
 1. Pitch the product that fits their goals/persona:
@@ -54,7 +56,7 @@ Please write the sales agent response:
         
         # Deduce recommended product from response if mentioned
         recommended_product = context.current_product
-        for prod in ["Smart Savings", "Elite Card", "Personal Loan", "Fixed Deposit", "SIP", "Education Loan"]:
+        for prod in ["Smart Savings", "Elite Card", "Personal Loan", "Fixed Deposit", "SIP", "Education Loan", "Home Loan", "Life Insurance"]:
             if prod.lower() in response.lower():
                 recommended_product = f"SBI {prod}"
                 if prod == "SIP":
