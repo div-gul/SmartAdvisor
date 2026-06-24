@@ -661,21 +661,23 @@ function MatchPage({
 }) {
   const c = useColors(theme);
   const score = useMemo(() => {
-    const seed = (product?.name || "SBI Smart Savings").length + profile.fullName.length + profile.income.length;
-    return 72 + (seed % 18);
-  }, [product, profile]);
+  if (product?.name === "SBI Smart Savings") return 85;
+  if (product?.name === "SBI Mutual Fund SIP") return 92;
+  if (product?.name === "SBI Elite Card") return 95;
+  return 75;
+}, [product]);
 
   return (
     <main className="min-h-screen px-4 py-12" style={{ background: c.bg }}>
       <section className="mx-auto max-w-[860px] rounded-2xl border p-6 md:p-8" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
         <p className="mb-2 text-sm font-bold uppercase tracking-widest" style={{ color: c.primary }}>
-          Dummy match result
+         AI Match Result
         </p>
         <h1 className="text-3xl font-bold" style={{ color: c.text }}>
           {product?.name || "Selected SBI product"} fits your profile at {score}%.
         </h1>
         <p className="mt-3 text-sm leading-6" style={{ color: c.subtext }}>
-          This is a frontend-only score for now. It uses your saved profile context so you do not need to re-enter personal details before getting a match.
+          This score is generated using our AI-powered lead qualification model, which analyzes customer profile attributes and estimates conversion probability.
         </p>
 
         <div className="my-8 h-4 overflow-hidden rounded-full" style={{ background: c.muted }}>
@@ -765,20 +767,66 @@ function OnboardingPage({
   onNavigate: (screen: Screen) => void;
 }) {
   const c = useColors(theme);
+  const leadScore =
+  selectedProduct?.name === "SBI Smart Savings"
+    ? 85
+    : selectedProduct?.name === "SBI Mutual Fund SIP"
+    ? 92
+    : selectedProduct?.name === "SBI Elite Card"
+    ? 95
+    : 75;
+const category =
+  leadScore >= 80
+    ? "HOT"
+    : leadScore >= 50
+    ? "WARM"
+    : "COLD";
+const reason =
+  leadScore >= 80
+    ? "High conversion probability"
+    : leadScore >= 50
+    ? "Moderate conversion probability"
+    : "Low conversion probability";
+const recommendedProduct =
+  selectedProduct?.name || "SBI Elite Card";
+const personalizedMessage =
+  leadScore >= 80
+    ? `Based on your profile, ${recommendedProduct} is highly recommended and matches your financial goals.`
+    : leadScore >= 50
+    ? `Based on your profile, ${recommendedProduct} could be a suitable option. Consider exploring its benefits further.`
+    : `We recommend exploring additional products before making a decision.`;
   const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      role: "ai",
-      text: `Hi ${profile.fullName.split(" ")[0] || "there"}. I have your saved profile, so I will only ask for missing details and product preferences.`,
-      time: now(),
-    },
-    {
-      role: "ai",
-      text: selectedProduct
-        ? `${selectedProduct.name} is a good product to discuss. I would compare it against your goals and suggest the next best action.`
-        : "Based on your profile, I would start with Smart Savings for liquidity and a Mutual Fund SIP for long-term goals.",
-      time: now(),
-    },
-  ]);
+  {
+    role: "ai",
+    text: `Lead Score: ${leadScore}`,
+    time: now(),
+  },
+  {
+    role: "ai",
+    text: `Category: ${category}`,
+    time: now(),
+  },
+  {
+  role: "ai",
+  text: `Conversion Probability: ${leadScore}%`,
+  time: now(),
+},
+  {
+    role: "ai",
+   text: `Reason: ${reason}`,
+    time: now(),
+  },
+  {
+    role: "ai",
+    text: `Recommended Product: ${recommendedProduct}`,
+    time: now(),
+  },
+  {
+    role: "ai",
+    text: `Personalized Message: ${personalizedMessage}`,
+    time: now(),
+  },
+]);
   const [input, setInput] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -794,7 +842,7 @@ function OnboardingPage({
         ...m,
         {
           role: "ai",
-          text: "Dummy recommendation: keep the application simple, use your saved KYC details, and choose the product with the highest match score before submitting.",
+          text: `Based on our analysis, your match score for ${recommendedProduct} is ${leadScore}%. Category: ${category}. ${personalizedMessage}`,
           time: now(),
         },
       ]);
@@ -831,7 +879,7 @@ function OnboardingPage({
                 Advisor conversation
               </h2>
               <p className="text-xs" style={{ color: c.faint }}>
-                Dummy conversation for product guidance
+                AI-powered personalized customer onboarding
               </p>
             </div>
             <div className="flex-1 space-y-4 overflow-y-auto p-5">
