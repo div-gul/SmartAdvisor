@@ -27,9 +27,11 @@ SBI CATALOG:
 1. SBI Smart Savings (zero balance account)
 2. SBI Elite Card (premium rewards card)
 3. SBI Personal Loan (quick unsecured credit)
-4. SBI Fixed Deposit (stable guaranteed returns)
-5. SBI Mutual Fund SIP (wealth building investment)
-6. SBI Education Loan (student studies credit)
+4. SBI Home Loan (property purchase financing)
+5. SBI Fixed Deposit (stable guaranteed returns)
+6. SBI Mutual Fund SIP (wealth building investment)
+7. SBI Education Loan (student studies credit)
+8. SBI Life Insurance (family protection and financial security)
 
 Provide output in JSON format:
 {

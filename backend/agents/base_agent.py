@@ -26,7 +26,9 @@ class BaseAgent(ABC):
         summary = f"Lead ID: {context.lead_id}\n"
         summary += f"Lead Score: {context.lead_score} ({context.lead_tier})\n"
         if context.persona:
-            summary += f"Persona: {context.persona.persona} | Budget: {context.persona.budget} | Intent: {context.persona.intent}\n"
+         summary += f"Persona: {context.persona.persona} | Budget: {context.persona.budget} | Intent: {context.persona.intent}\n"
+        summary += f"Likely Products: {', '.join(context.persona.likely_products)}\n"
+        summary += f"Key Concerns: {', '.join(context.persona.key_concerns)}\n"
         if context.user_info:
             info = context.user_info
             if info.name: summary += f"Name: {info.name}\n"
@@ -36,5 +38,7 @@ class BaseAgent(ABC):
             if info.goals: summary += f"Goals: {info.goals}\n"
             if info.risk_tolerance: summary += f"Risk Tolerance: {info.risk_tolerance}\n"
         summary += f"Messages exchanged: {len(context.messages)}\n"
+        if context.current_product:
+         summary += f"Current Product: {context.current_product}\n"
         summary += f"Qualification complete: {context.qualification_complete}\n"
         return summary

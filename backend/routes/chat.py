@@ -46,6 +46,7 @@ async def chat_endpoint(request: ChatRequest):
         # 4. If no persona exists yet, run research first to initialize it
         if not context.persona or context.persona.persona == "Unknown":
             res_response = await research_agent.run(context)
+            
             if "persona" in res_response.state_updates:
                 await state_manager.update_context(lead_id, persona=res_response.state_updates["persona"])
             # Refresh context with new persona

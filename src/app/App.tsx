@@ -10,7 +10,7 @@ import {
   Sun,
   User,
 } from "lucide-react";
-import { sendChatMessage, apiLogin, apiRegister, apiUpdateProfile } from "./api";
+import { sendChatMessage, getPrediction, apiLogin, apiRegister, apiUpdateProfile } from "./api";
 import type { ChatResponse, PersonaProfile, NextBestAction, AgentDecisionInfo, AuthResponse } from "./api";
 
 type Screen = "landing" | "auth" | "products" | "onboarding" | "match" | "profile" | "admin";
@@ -901,6 +901,7 @@ function OnboardingPage({
   const [persona, setPersona] = useState<PersonaProfile | null>(null);
   const [nba, setNba] = useState<NextBestAction | null>(null);
   const [decision, setDecision] = useState<AgentDecisionInfo | null>(null);
+  const [conversionProbability, setConversionProbability] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -918,14 +919,12 @@ function OnboardingPage({
           phone: profile.phone || "+91 98765 43210",
           occupation: profile.occupation || "Salaried professional",
           income: profile.income || "Rs 12 lakh p.a.",
-          goals: profile.goals || "Emergency fund, savings",
+          goals: profile.goals || "",
           age: profile.age || "31",
           risk_tolerance: profile.risk || "Moderate"
         };
         
-        const welcomeMsg = selectedProduct 
-          ? `Hi, I am interested in exploring ${selectedProduct.name}.` 
-          : "Hello, I want to start my banking onboarding journey.";
+        const welcomeMsg = "";
 
         const res = await sendChatMessage({
           user_message: welcomeMsg,
@@ -938,11 +937,21 @@ function OnboardingPage({
         setNba(res.next_best_action || null);
         setPersona(res.persona || null);
         setDecision(res.agent_decision || null);
+        try {
+         const pred = await getPrediction(res.lead_id);
+         setConversionProbability(pred.conversion_probability);
+        } catch (err) {
+         console.error("Prediction fetch failed", err);
+        }
         
-        setMessages([
-          { role: "user", text: welcomeMsg, time: now() },
-          { role: "ai", text: res.response, time: now(), agent_name: res.agent_used }
-        ]);
+       setMessages([
+  {
+    role: "ai",
+    text: "Welcome! I'm ready to assist you with your banking needs. What financial goal would you like help with today?",
+    time: now(),
+    agent_name: "research"
+  }
+]);
       } catch (err) {
         console.error("Initialization error:", err);
         setMessages([
@@ -1162,6 +1171,16 @@ function OnboardingPage({
               <p className="text-xs leading-5" style={{ color: c.subtext }}>
                 Based on active conversation factors, profile parameters, and interest specificity. Hot tier (&gt;70%) triggers automated CRM handoff.
               </p>
+              {conversionProbability !== null && (
+  <div className="mt-3 rounded-xl p-3" style={{ background: c.muted }}>
+    <div className="text-xs font-semibold" style={{ color: c.faint }}>
+      Conversion Probability
+    </div>
+    <div className="text-lg font-bold" style={{ color: c.primary }}>
+      {(conversionProbability * 100).toFixed(0)}%
+    </div>
+  </div>
+)}
             </div>
 
             {/* 2. Persona Profile Card */}

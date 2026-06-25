@@ -29,6 +29,8 @@ INSTRUCTIONS:
    - Retired Senior -> Fixed Deposit
    - Student -> Education Loan or Smart Savings (zero balance)
    - Budget Conscious -> Smart Savings (zero balance) or Mutual Fund SIP (small Rs 500 investment)
+      - User mentions buying a house, home purchase, property, EMI, mortgage -> SBI Home Loan
+   - User mentions family protection, life cover, dependents, insurance, financial security -> SBI Life Insurance
 2. OBJECTION HANDLING rules:
    - If they mention "cost", "fee", "too expensive", "expensive", "charges": Highlight fee waiver milestones (e.g. for Elite Card, annual fee is waived if spending threshold is met), zero-balance features, or suggest a cheaper alternative like SBI Smart Savings.
    - If they say "need details", "more info", "tell me more", "how it works": Provide a concise list of benefits and immediately offer to schedule a live demo or video call.
@@ -49,9 +51,30 @@ Current State:
 
 Chat History:
 {history}
+Current Product: {context.current_product}
+IMPORTANT:
+The most recent user messages have higher priority than profile defaults.
+
+If the user mentions buying a home, first home, property purchase, mortgage, or home loan, recommend SBI Home Loan.
+
+Do not redirect the conversation to savings products unless the user explicitly asks about savings.
+
+IMPORTANT:
+If Current Product exists, continue discussing ONLY that product.
+Do NOT switch to another SBI product unless the user explicitly asks for a different product.
 
 Please write the sales agent response:
+
 """
+        if context.current_product and context.messages:
+            last_user_msg = context.messages[-1].get("content", "").lower()
+
+            if last_user_msg in ["yes", "yes please", "sure", "okay", "ok", "proceed"]:
+                return AgentResponse(
+                    message=f"Great! Let's proceed with {context.current_product}. I can help you start the application process and share the next steps.",
+                    agent_name=self.name,
+                     state_updates={}
+        )
         response = await call_llm(self.system_prompt, [{"role": "user", "content": prompt}], temperature=0.7)
         
         # Deduce recommended product from response if mentioned

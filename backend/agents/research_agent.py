@@ -22,13 +22,20 @@ Classify the user into one of these standard personas:
 6. "Retired Senior" - values security, fixed deposit yields, senior citizen interest boosts, personalized support.
 7. "Small Business Owner" - needs commercial loans, merchant accounts, flexible cash credit, business cards.
 
+Intent Mapping Rules:
+- Buying a house, first home, property purchase, mortgage, home financing -> home_loan
+- Travel rewards, airport lounge access, premium card, cashback card -> credit_card
+- Monthly investing, wealth creation, SIP, mutual funds -> sip
+- Education funding, college fees, study abroad -> education_loan
+- General banking, savings account, emergency fund -> savings
+
 Return a JSON profile with EXACTLY the following keys:
 {
   "persona": "One of the personas above",
   "budget": "low" | "moderate" | "high" | "premium",
-  "intent": "savings" | "credit_card" | "personal_loan" | "fixed_deposit" | "sip" | "education_loan" | "general_inquiry",
+  "intent": "savings" | "credit_card" | "personal_loan" | "home_loan" | "fixed_deposit" | "sip" | "education_loan" | "general_inquiry"
   "risk_tolerance": "low" | "moderate" | "high",
-  "likely_products": ["Choose 1-2 from: SBI Smart Savings, SBI Elite Card, SBI Personal Loan, SBI Fixed Deposit, SBI Mutual Fund SIP, SBI Education Loan"],
+ "likely_products": ["Choose 1-2 from: SBI Smart Savings, SBI Elite Card, SBI Personal Loan, SBI Home Loan, SBI Fixed Deposit, SBI Mutual Fund SIP, SBI Education Loan, SBI Life Insurance"],
   "key_concerns": ["concerns like liquidity, interest rate, safety, digital-access, rewards"],
   "communication_style": "formal" | "friendly" | "data-driven" | "educational"
 }
@@ -57,6 +64,7 @@ Return a JSON profile with EXACTLY the following keys:
         
         # Call LLM
         persona_dict = await call_llm_json(self.system_prompt, [{"role": "user", "content": prompt}])
+        print("RESEARCH AGENT OUTPUT:", persona_dict)
         
         # Create profile model
         profile = PersonaProfile(
@@ -69,11 +77,7 @@ Return a JSON profile with EXACTLY the following keys:
             communication_style=persona_dict.get("communication_style", "friendly")
         )
         
-        greeting = f"Welcome! Based on your interest, I've identified you as a {profile.persona}. "
-        if profile.likely_products:
-            greeting += f"I recommend we explore {profile.likely_products[0]}. How can I help you today?"
-        else:
-            greeting += "How can I assist you with your banking needs today?"
+        greeting = "Welcome! I'm ready to assist you with your banking needs. What financial goal would you like help with today?"
             
         return AgentResponse(
             message=greeting,
