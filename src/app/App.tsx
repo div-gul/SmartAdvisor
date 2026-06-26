@@ -161,9 +161,11 @@ function now() {
 
 function SBILogo({ color, size = 30 }: { color: string; size?: number }) {
   return (
-    <svg width={size} height={Math.round(size * 0.78)} viewBox="0 0 28 22" fill="none" aria-hidden="true">
-      <path d="M14 0L27.5 22H0.5L14 0Z" fill={color} opacity="0.9" />
-      <path d="M14 5L24 22H4L14 5Z" fill={color} />
+    <svg width={size} height={size} viewBox="0 0 42 42" fill="none" aria-hidden="true">
+      <path d="M21 3L39 36H3L21 3Z" fill={color} opacity="0.96" />
+      <path d="M21 3L21 36H3L21 3Z" fill="#62F4F2" opacity="0.55" />
+      <path d="M21 3L39 36H21L21 3Z" fill="#0E7F8A" opacity="0.86" />
+      <path d="M21 15L31 36H11L21 15Z" fill="#88FFFF" opacity="0.34" />
     </svg>
   );
 }
@@ -185,7 +187,7 @@ function Header({
 }) {
   const c = useColors(theme);
   const navItems = [
-    { label: "Home", screen: "landing" as Screen, roles: ["guest", "user", "admin"] },
+    { label: "Home", screen: "landing" as Screen, roles: ["guest"] },
     { label: "Products", screen: "products" as Screen, roles: ["guest", "user"] },
     { label: "AI Advisor", screen: "onboarding" as Screen, roles: ["user"] },
     { label: "Profile", screen: "profile" as Screen, roles: ["user"] },
@@ -198,7 +200,7 @@ function Header({
       style={{ background: theme === "light" ? "rgba(247,250,250,0.9)" : "rgba(16,23,24,0.92)", borderColor: c.border, backdropFilter: "blur(14px)" }}
     >
       <div className="mx-auto flex h-16 w-full max-w-[1180px] items-center justify-between px-4 md:px-6">
-        <button onClick={() => onNavigate("landing")} className="flex items-center gap-3">
+        <button onClick={() => onNavigate(role === "admin" ? "admin" : role === "user" ? "products" : "landing")} className="flex items-center gap-3">
           <SBILogo color={c.primary} />
           <span className="text-xl font-bold" style={{ color: c.primary, fontFamily: "Inter, sans-serif" }}>
             Smart Advisor
@@ -253,69 +255,178 @@ function Header({
 function LandingPage({
   theme,
   role,
+  onThemeToggle,
   onNavigate,
+  onAuthSuccess,
 }: {
   theme: ThemeMode;
   role: Role;
+  onThemeToggle: () => void;
   onNavigate: (screen: Screen) => void;
+  onAuthSuccess: (user: AuthResponse, stayOnLanding?: boolean) => void;
 }) {
   const c = useColors(theme);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<AuthMode>("login");
+  const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [registerName, setRegisterName] = useState("");
+  const [registerPhone, setRegisterPhone] = useState("");
+
   const features = [
-    ["AI product matching", "Compare banking products against your needs instead of popularity."],
-    ["Side-by-side form filling", "The advisor can build the form as the conversation progresses."],
-    ["Profile-aware guidance", "Logged-in users can reuse saved details during onboarding."],
-    ["Role-separated views", "Customers see customer journeys; admins see platform controls only."],
+    { title: "AI Product Matching", body: "Find the right SBI products for your needs.", icon: <Search size={19} /> },
+    { title: "Auto Form Filling", body: "Forms are filled automatically while you chat.", icon: <ClipboardList size={19} /> },
+    { title: "Personalized Recommendations", body: "Recommendations based on your financial profile.", icon: <BadgeCheck size={19} /> },
+    { title: "Secure & Trusted", body: "Bank-grade encrypted onboarding.", icon: <Shield size={19} /> },
   ];
 
-  return (
-    <main className="min-h-screen" style={{ background: c.bg }}>
-      <section className="mx-auto grid max-w-[1180px] gap-10 px-4 py-16 md:grid-cols-[1.05fr_0.95fr] md:px-6 md:py-24">
-        <div>
-          <div className="mb-6 inline-flex rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-widest" style={{ borderColor: c.border, color: c.primary, background: c.primarySoft }}>
-            SBI customer onboarding
-          </div>
-          <h1 className="mb-5 text-4xl font-semibold leading-tight md:text-6xl" style={{ color: c.text, fontFamily: "Inter, sans-serif" }}>
-            Find the right SBI product without repeating yourself.
-          </h1>
-          <p className="mb-8 max-w-xl text-base leading-7 md:text-lg" style={{ color: c.subtext }}>
-            Smart Advisor now separates visitor, user, and admin journeys. Try mode stays customer-facing, while logged-in users can save profile details for guided form filling.
-          </p>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              onClick={() => onNavigate(role === "user" ? "onboarding" : "products")}
-              className="rounded-full px-7 py-3 text-sm font-bold text-white"
-              style={{ background: "#005B65", fontFamily: "Geist, sans-serif" }}
-            >
-              {role === "user" ? "Start AI Advisor" : "Try Product Match"}
-            </button>
-            <button
-              onClick={() => onNavigate(role === "guest" ? "auth" : role === "admin" ? "admin" : "profile")}
-              className="rounded-full border px-7 py-3 text-sm font-bold"
-              style={{ borderColor: c.border, color: c.primary, background: c.surface }}
-            >
-              {role === "guest" ? "Login or Register" : role === "admin" ? "Open Admin Console" : "View Profile"}
-            </button>
-          </div>
-        </div>
+  const openAuth = (mode: AuthMode) => {
+    setModalMode(mode);
+    setMessage(null);
+    setModalOpen(true);
+  };
 
-        <div className="grid gap-4">
-          {features.map(([title, body]) => (
-            <div key={title} className="rounded-2xl border p-5" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
-              <div className="mb-2 flex items-center gap-3">
-                <span className="grid h-9 w-9 place-items-center rounded-full" style={{ background: c.primarySoft, color: c.primary }}>
-                  <BadgeCheck size={18} />
-                </span>
-                <h2 className="text-lg font-bold" style={{ color: c.text }}>
-                  {title}
-                </h2>
-              </div>
-              <p className="text-sm leading-6" style={{ color: c.subtext }}>
-                {body}
-              </p>
+  const submitLandingAuth = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setLoading(true);
+    setMessage(null);
+
+    try {
+      if (modalMode === "login") {
+        const user = await apiLogin(loginEmail, loginPassword);
+        onAuthSuccess(user);
+        setModalOpen(false);
+        return;
+      }
+
+      const user = await apiRegister(registerName, loginEmail, loginPassword, "user");
+      if (registerPhone.trim()) {
+        await apiUpdateProfile({ user_id: user.user_id, phone: registerPhone.trim() });
+      }
+      onAuthSuccess({ ...user, phone: registerPhone.trim() || user.phone });
+      setMessage("Account created. Opening products.");
+      setModalOpen(false);
+    } catch {
+      if (modalMode === "login") {
+        setMessage("Account not found. Let's create one for you.");
+        setTimeout(() => {
+          setModalMode("register");
+          setRegisterName("");
+        }, 850);
+      } else {
+        setMessage("Could not create the account. Check the details and try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <main className="premium-landing">
+      <div className="landing-grid" />
+      <svg className="landing-graph" viewBox="0 0 900 420" fill="none" aria-hidden="true">
+        <path
+          d="M20 372 C130 350 160 290 242 288 C318 286 350 244 426 224 C512 202 548 148 624 130 C704 112 752 78 864 36"
+          stroke="currentColor"
+          strokeWidth="5"
+          strokeLinecap="round"
+        />
+        <circle cx="864" cy="36" r="9" fill="currentColor" />
+      </svg>
+
+      <div className="landing-shell">
+        <nav className="landing-nav">
+          <button className="landing-brand" onClick={() => onNavigate(role === "admin" ? "admin" : role === "user" ? "products" : "landing")}>
+            <span className="landing-brand-mark">
+              <SBILogo color={c.primary} size={24} />
+            </span>
+            <span>Smart Advisor</span>
+          </button>
+          <div className="landing-actions">
+            <button className="landing-theme-toggle" aria-label="Toggle color theme" onClick={onThemeToggle}>
+              <Sun size={18} />
+              <Moon size={19} />
+            </button>
+            {role === "guest" ? (
+              <button className="landing-login-button" onClick={() => openAuth("login")}>
+                <User size={19} />
+                <span>Login</span>
+              </button>
+            ) : (
+              <button className="landing-login-button" onClick={() => onNavigate(role === "admin" ? "admin" : "profile")}>
+                <User size={19} />
+                {role === "admin" ? "Admin" : "Profile"}
+              </button>
+            )}
+          </div>
+        </nav>
+
+        <section className="landing-hero">
+          <div className="landing-copy">
+            <h1 className="landing-title">Up your financial game.</h1>
+            <p className="landing-subtitle">specifically designed for you.</p>
+            <div className="landing-ctas">
+              <button className="landing-cta primary" onClick={() => onNavigate(role === "user" ? "onboarding" : "products")}>
+                Try Now
+                <span aria-hidden="true">-&gt;</span>
+              </button>
+              <button className="landing-cta secondary" onClick={() => (role === "guest" ? openAuth("register") : onNavigate("profile"))}>
+                Register
+                <span aria-hidden="true">-&gt;</span>
+              </button>
             </div>
-          ))}
+          </div>
+
+          <div className="hanging-cards" aria-label="Smart Advisor capabilities">
+            {features.map((feature) => (
+              <article className="glass-card" key={feature.title}>
+                <span className="card-icon">{feature.icon}</span>
+                <h2>{feature.title}</h2>
+                <p>{feature.body}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      </div>
+
+      {modalOpen && (
+        <div className="landing-modal-backdrop" role="dialog" aria-modal="true">
+          <form className="landing-modal" onSubmit={submitLandingAuth}>
+            <div className="landing-modal-header">
+              <div>
+                <h2>{modalMode === "login" ? "Login" : "Create account"}</h2>
+                <p>{modalMode === "login" ? "Access your saved profile and AI advisor." : "Create a customer profile for faster onboarding."}</p>
+              </div>
+              <button type="button" className="landing-modal-close" onClick={() => setModalOpen(false)} aria-label="Close login modal">
+                x
+              </button>
+            </div>
+
+            {message && <div className="landing-auth-message">{message}</div>}
+
+            {modalMode === "register" && (
+              <>
+                <label htmlFor="landing-name">Full Name</label>
+                <input id="landing-name" value={registerName} onChange={(event) => setRegisterName(event.target.value)} required />
+                <label htmlFor="landing-phone">Phone</label>
+                <input id="landing-phone" value={registerPhone} onChange={(event) => setRegisterPhone(event.target.value)} required />
+              </>
+            )}
+
+            <label htmlFor="landing-email">Email</label>
+            <input id="landing-email" type="email" value={loginEmail} onChange={(event) => setLoginEmail(event.target.value)} required />
+
+            <label htmlFor="landing-password">Password</label>
+            <input id="landing-password" type="password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} required />
+
+            <button className="landing-modal-submit" disabled={loading}>
+              {loading ? "Please wait..." : modalMode === "login" ? "Login" : "Create Account"}
+            </button>
+          </form>
         </div>
-      </section>
+      )}
     </main>
   );
 }
@@ -904,10 +1015,6 @@ function OnboardingPage({
   const [conversionProbability, setConversionProbability] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isLoading]);
-
   // Initialize Conversation with User Profile (runs research agent)
   useEffect(() => {
     const initializeChat = async () => {
@@ -1329,12 +1436,26 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("landing");
   const [role, setRole] = useState<Role>("guest");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
-  const [theme, setTheme] = useState<ThemeMode>("light");
+  const [theme, setTheme] = useState<ThemeMode>(() => {
+    const saved = window.localStorage.getItem("smart-advisor-theme");
+    if (saved === "light" || saved === "dark") return saved;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
   const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
   const [userId, setUserId] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(PRODUCTS[0]);
 
   const navigate = (nextScreen: Screen) => {
+    if (role === "user" && nextScreen === "landing") {
+      setScreen("products");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    if (role === "admin" && nextScreen === "landing") {
+      setScreen("admin");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (role === "guest" && ["profile", "admin", "onboarding", "match"].includes(nextScreen)) {
       setScreen("auth");
       return;
@@ -1353,50 +1474,78 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", theme === "dark");
+    window.localStorage.setItem("smart-advisor-theme", theme);
   }, [theme]);
 
   const c = useColors(theme);
 
+  const handleAuthSuccess = (user: AuthResponse, stayOnLanding = false) => {
+    setRole(user.role as Role);
+    setUserId(user.user_id);
+    setProfile({
+      fullName: user.name,
+      email: user.email,
+      phone: user.phone || "",
+      age: user.age || "",
+      occupation: user.occupation || "",
+      income: user.income || "",
+      goals: user.goals || "",
+      risk: user.risk_tolerance || "",
+      address: user.address || "",
+      pan: user.pan || ""
+    });
+    if (!stayOnLanding) {
+      setScreen(user.role === "admin" ? "admin" : "products");
+    }
+  };
+
   return (
     <div className="min-h-screen" style={{ background: c.bg, color: c.text, fontFamily: "Inter, sans-serif" }}>
-      <Header
-        screen={screen}
-        role={role}
-        theme={theme}
-        onThemeToggle={() => setTheme((value) => (value === "light" ? "dark" : "light"))}
-        onNavigate={navigate}
-        onLogout={() => {
-          setRole("guest");
-          setUserId(null);
-          setProfile(EMPTY_PROFILE);
-          setScreen("landing");
-        }}
-      />
-
-      {screen === "landing" && <LandingPage theme={theme} role={role} onNavigate={navigate} />}
-      {screen === "auth" && (
-        <AuthPage
+      {screen !== "landing" && screen !== "auth" && (
+        <Header
+          screen={screen}
+          role={role}
           theme={theme}
-          mode={authMode}
-          onModeChange={setAuthMode}
-          onAuthSuccess={(user) => {
-            setRole(user.role as Role);
-            setUserId(user.user_id);
-            setProfile({
-              fullName: user.name,
-              email: user.email,
-              phone: user.phone || "",
-              age: user.age || "",
-              occupation: user.occupation || "",
-              income: user.income || "",
-              goals: user.goals || "",
-              risk: user.risk_tolerance || "",
-              address: user.address || "",
-              pan: user.pan || ""
-            });
-            setScreen(user.role === "admin" ? "admin" : "profile");
+          onThemeToggle={() => setTheme((value) => (value === "light" ? "dark" : "light"))}
+          onNavigate={navigate}
+          onLogout={() => {
+            setRole("guest");
+            setUserId(null);
+            setProfile(EMPTY_PROFILE);
+            setScreen("landing");
           }}
         />
+      )}
+
+      {screen === "landing" && (
+        <LandingPage
+          theme={theme}
+          role={role}
+          onThemeToggle={() => setTheme((value) => (value === "light" ? "dark" : "light"))}
+          onNavigate={navigate}
+          onAuthSuccess={handleAuthSuccess}
+        />
+      )}
+      {screen === "auth" && (
+        <div className="auth-landing-shell">
+          <div className="auth-landing-backdrop" aria-hidden="true">
+            <LandingPage
+              theme={theme}
+              role="guest"
+              onThemeToggle={() => setTheme((value) => (value === "light" ? "dark" : "light"))}
+              onNavigate={navigate}
+              onAuthSuccess={handleAuthSuccess}
+            />
+          </div>
+          <div className="auth-landing-panel">
+            <AuthPage
+              theme={theme}
+              mode={authMode}
+              onModeChange={setAuthMode}
+              onAuthSuccess={(user) => handleAuthSuccess(user)}
+            />
+          </div>
+        </div>
       )}
       {screen === "products" && <ProductsPage theme={theme} role={role} selectedProduct={selectedProduct} onSelectProduct={setSelectedProduct} onNavigate={navigate} />}
       {screen === "match" && <MatchPage theme={theme} product={selectedProduct} profile={profile} onNavigate={navigate} />}
