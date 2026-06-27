@@ -1,7 +1,4 @@
 
-  # Extend Customer Onboarding Flow
-
-  This is a code bundle for Extend Customer Onboarding Flow. The original project is available at https://www.figma.com/design/lonEUIQcSTkBtTMzdmohHq/Extend-Customer-Onboarding-Flow.
 
   ## Running the code
 
