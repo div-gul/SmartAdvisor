@@ -50,6 +50,7 @@ export interface ChatResponse {
   next_best_action?: NextBestAction;
   persona?: PersonaProfile;
   agent_decision?: AgentDecisionInfo;
+  conversion_probability: number;
 }
 
 export interface LeadScoreResponse {
@@ -198,3 +199,5 @@ export async function apiUpdateProfile(fields: {
   }
   return res.json();
 }
+
+

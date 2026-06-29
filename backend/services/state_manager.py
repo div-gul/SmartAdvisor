@@ -65,7 +65,8 @@ class StateManager:
             user_info=user_info,
             current_product=lead_data.get('recommended_product'),
             agent_decisions=decisions,
-            qualification_complete=lead_data.get('status') == 'qualified'
+            qualification_complete=lead_data.get('status') == 'qualified',
+            conversion_probability=lead_data.get('conversion_probability', 0.0)
         )
         
         self._contexts[lead_id] = ctx
@@ -104,38 +105,43 @@ class StateManager:
         # Retrieve context (either newly created or cached/loaded)
         ctx = await self.get_context(lead_id)
         
-        # Sync user info updates
+        # Sync user info updates. Empty incoming fields must not erase facts learned from chat.
         if user_info:
             user_info_changed = False
-            if ctx.user_info:
-                # Compare fields to check for changes
-                fields_to_compare = ["name", "email", "phone", "occupation", "income", "goals", "age", "risk_tolerance"]
-                for f in fields_to_compare:
-                    old_val = getattr(ctx.user_info, f, "") or ""
-                    new_val = getattr(user_info, f, "") or ""
-                    if str(old_val).strip() != str(new_val).strip():
-                        user_info_changed = True
-                        break
-            else:
-                user_info_changed = True
-                
-            if user_info_changed:
-                ctx.user_info = user_info
-                # Save updates to DB if user exists
+            core_persona_changed = False
+            fields_to_compare = ["name", "email", "phone", "occupation", "income", "goals", "age", "risk_tolerance"]
+            merged_info = ctx.user_info.copy(deep=True) if ctx.user_info else UserInfo()
+
+            for f in fields_to_compare:
+                old_val = getattr(merged_info, f, "") or ""
+                new_val = getattr(user_info, f, "") or ""
+                new_val = str(new_val).strip()
+                if not new_val:
+                    continue
+                if str(old_val).strip() != new_val:
+                    setattr(merged_info, f, new_val)
+                    user_info_changed = True
+                    if f in ["occupation", "income", "goals", "risk_tolerance"]:
+                        core_persona_changed = True
+
+            if user_info_changed or not ctx.user_info:
+                ctx.user_info = merged_info
+                # Save merged updates to DB if user exists.
                 if user_id:
                     await database.update_user_profile(
                         user_id,
-                        name=user_info.name,
-                        phone=user_info.phone,
-                        age=user_info.age,
-                        occupation=user_info.occupation,
-                        income=user_info.income,
-                        goals=user_info.goals,
-                        risk_tolerance=user_info.risk_tolerance
+                        name=merged_info.name,
+                        phone=merged_info.phone,
+                        age=merged_info.age,
+                        occupation=merged_info.occupation,
+                        income=merged_info.income,
+                        goals=merged_info.goals,
+                        risk_tolerance=merged_info.risk_tolerance
                     )
-                # Reset persona in memory and database so ResearchAgent re-runs
-                ctx.persona = None
-                await database.update_lead(lead_id, persona=None)
+                if core_persona_changed:
+                    # Reset persona in memory and database so ResearchAgent re-runs
+                    ctx.persona = None
+                    await database.update_lead(lead_id, persona=None)
             
         return lead_id
 
@@ -168,8 +174,11 @@ class StateManager:
                 db_updates["recommended_product"] = val
             elif key == "qualification_complete":
                 db_updates["status"] = "qualified" if val else "active"
+            elif key == "conversion_probability":
+                db_updates["conversion_probability"] = val
 
         if db_updates:
             await database.update_lead(lead_id, **db_updates)
 
 state_manager = StateManager()
+

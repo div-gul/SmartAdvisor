@@ -18,6 +18,8 @@ type Role = "guest" | "user" | "admin";
 type AuthMode = "login" | "register";
 type ThemeMode = "light" | "dark";
 
+const AUTH_STORAGE_KEY = "smartadvisor.auth";
+
 type Profile = {
   fullName: string;
   email: string;
@@ -44,6 +46,7 @@ type ChatMessage = {
   role: "ai" | "user";
   text: string;
   time: string;
+  agent_name?: string;
 };
 
 const DEFAULT_PROFILE: Profile = {
@@ -71,6 +74,42 @@ const EMPTY_PROFILE: Profile = {
   address: "",
   pan: "",
 };
+type SavedSession = {
+  role: Role;
+  userId: string | null;
+  profile: Profile;
+};
+
+function loadSavedSession(): SavedSession | null {
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SavedSession>;
+    if (!parsed.role || !["user", "admin"].includes(parsed.role)) return null;
+    return {
+      role: parsed.role,
+      userId: parsed.userId || null,
+      profile: { ...EMPTY_PROFILE, ...(parsed.profile || {}) },
+    };
+  } catch {
+    return null;
+  }
+}
+
+function profileFromAuth(user: AuthResponse): Profile {
+  return {
+    fullName: user.name,
+    email: user.email,
+    phone: user.phone || "",
+    age: user.age || "",
+    occupation: user.occupation || "",
+    income: user.income || "",
+    goals: user.goals || "",
+    risk: user.risk_tolerance || "",
+    address: user.address || "",
+    pan: user.pan || "",
+  };
+}
 
 const PRODUCTS: Product[] = [
   {
@@ -157,6 +196,12 @@ function useColors(theme: ThemeMode) {
 
 function now() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+const THINKING_DELAY_MS = 3000;
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
 function SBILogo({ color, size = 30 }: { color: string; size?: number }) {
@@ -996,14 +1041,7 @@ function OnboardingPage({
   onNavigate: (screen: Screen) => void;
 }) {
   const c = useColors(theme);
-  const [messages, setMessages] = useState<any[]>([
-    {
-      role: "ai",
-      text: "Initializing Smart Advisor AI Agent network...",
-      time: now(),
-      agent_name: "strategy",
-    }
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [leadId, setLeadId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -1015,67 +1053,28 @@ function OnboardingPage({
   const [conversionProbability, setConversionProbability] = useState<number | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Initialize Conversation with User Profile (runs research agent)
   useEffect(() => {
-    const initializeChat = async () => {
-      setIsLoading(true);
-      try {
-        const userInfo = {
-          name: profile.fullName || "Priya Mehta",
-          email: profile.email || "priya.mehta@example.com",
-          phone: profile.phone || "+91 98765 43210",
-          occupation: profile.occupation || "Salaried professional",
-          income: profile.income || "Rs 12 lakh p.a.",
-          goals: profile.goals || "",
-          age: profile.age || "31",
-          risk_tolerance: profile.risk || "Moderate"
-        };
-        
-        const welcomeMsg = "";
-
-        const res = await sendChatMessage({
-          user_message: welcomeMsg,
-          user_info: userInfo
-        });
-
-        setLeadId(res.lead_id);
-        setLeadScore(res.lead_score);
-        setLeadTier(res.lead_tier);
-        setNba(res.next_best_action || null);
-        setPersona(res.persona || null);
-        setDecision(res.agent_decision || null);
-        try {
-         const pred = await getPrediction(res.lead_id);
-         setConversionProbability(pred.conversion_probability);
-        } catch (err) {
-         console.error("Prediction fetch failed", err);
-        }
-        
-       setMessages([
-  {
-    role: "ai",
-    text: "Welcome! I'm ready to assist you with your banking needs. What financial goal would you like help with today?",
-    time: now(),
-    agent_name: "research"
-  }
-]);
-      } catch (err) {
-        console.error("Initialization error:", err);
-        setMessages([
-          { 
-            role: "ai", 
-            text: "Welcome! I'm ready to assist you. To get started, what product or banking goals can I help you with?", 
-            time: now(), 
-            agent_name: "qualification" 
-          }
-        ]);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initializeChat();
-  }, [profile, selectedProduct]);
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, isLoading]);
+  // Start cleanly: do not create a fake user message or call the backend until the customer speaks.
+  useEffect(() => {
+    setLeadId(null);
+    setLeadScore(20);
+    setLeadTier("Cold");
+    setNba(null);
+    setPersona(null);
+    setDecision(null);
+    setMessages([
+      {
+        role: "ai",
+        text: selectedProduct
+          ? `Hi${profile.fullName ? ` ${profile.fullName.split(" ")[0]}` : ""}, I can help you check whether ${selectedProduct.name} fits your needs. What goal, budget, or timeline should I consider first?`
+          : `Hi${profile.fullName ? ` ${profile.fullName.split(" ")[0]}` : ""}, I can help you find the right SBI product. What are you hoping to do today?`,
+        time: now(),
+        agent_name: "strategy",
+      },
+    ]);
+  }, [profile.fullName, selectedProduct]);
 
   const sendMessage = async (text: string) => {
     if (!text.trim()) return;
@@ -1099,6 +1098,8 @@ function OnboardingPage({
         }
       });
 
+      await delay(THINKING_DELAY_MS);
+
       setLeadScore(res.lead_score);
       setLeadTier(res.lead_tier);
       setNba(res.next_best_action || null);
@@ -1111,24 +1112,20 @@ function OnboardingPage({
       ]);
     } catch (err) {
       console.error("API Error sending message:", err);
-      // Fallback response
-      setTimeout(() => {
-        setMessages((m) => [
-          ...m,
-          { 
-            role: "ai", 
-            text: "I understand. Let's look at the options. Could you tell me more about your preference?", 
-            time: now(), 
-            agent_name: "sales" 
-          }
-        ]);
-        setIsLoading(false);
-      }, 500);
+      await delay(THINKING_DELAY_MS);
+      setMessages((m) => [
+        ...m,
+        {
+          role: "ai",
+          text: "I understand. Let's look at the options. Could you tell me more about your preference?",
+          time: now(),
+          agent_name: "sales"
+        }
+      ]);
     } finally {
       setIsLoading(false);
     }
   };
-
   const getAgentBadgeColor = (agent: string) => {
     switch (agent) {
       case "research": return { bg: "#E0F2FE", text: "#0369A1", label: "Research Agent" };
@@ -1170,8 +1167,7 @@ function OnboardingPage({
             <div className="rounded-xl border px-4 py-2 text-xs font-bold uppercase tracking-wide flex items-center gap-2" style={{ borderColor: c.border, background: c.surface, color: c.primary }}>
               Score: {leadScore}/100
             </div>
-          </div>
-        </div>
+          </div>        </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
           {/* Chat Panel */}
@@ -1261,7 +1257,8 @@ function OnboardingPage({
 
           {/* Intelligence Dashboard Panel */}
           <section className="space-y-4">
-            {/* 1. Lead Score Card */}
+
+                        {/* 1. Lead Score Card */}
             <div className="rounded-2xl border p-5" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
               <h3 className="text-sm font-bold uppercase tracking-wider mb-3" style={{ color: c.primary }}>
                 Lead Scoring (ML telemetry)
@@ -1289,8 +1286,7 @@ function OnboardingPage({
   </div>
 )}
             </div>
-
-            {/* 2. Persona Profile Card */}
+{/* 2. Persona Profile Card */}
             {persona && (
               <div className="rounded-2xl border p-5 animate-fade-in" style={{ background: c.surface, borderColor: c.border, boxShadow: c.shadow }}>
                 <div className="mb-3 flex items-center justify-between">
@@ -1433,16 +1429,17 @@ function AdminPage({ theme }: { theme: ThemeMode }) {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>("landing");
-  const [role, setRole] = useState<Role>("guest");
+  const savedSession = useMemo(() => loadSavedSession(), []);
+  const [screen, setScreen] = useState<Screen>(savedSession?.role === "admin" ? "admin" : savedSession?.role === "user" ? "profile" : "landing");
+  const [role, setRole] = useState<Role>(savedSession?.role || "guest");
   const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [theme, setTheme] = useState<ThemeMode>(() => {
     const saved = window.localStorage.getItem("smart-advisor-theme");
     if (saved === "light" || saved === "dark") return saved;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
-  const [profile, setProfile] = useState<Profile>(EMPTY_PROFILE);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [profile, setProfile] = useState<Profile>(savedSession?.profile || EMPTY_PROFILE);
+  const [userId, setUserId] = useState<string | null>(savedSession?.userId || null);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(PRODUCTS[0]);
 
   const navigate = (nextScreen: Screen) => {
@@ -1477,12 +1474,19 @@ export default function App() {
     window.localStorage.setItem("smart-advisor-theme", theme);
   }, [theme]);
 
+  useEffect(() => {
+    if (role === "guest") return;
+    window.localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({ role, userId, profile })
+    );
+  }, [role, userId, profile]);
+
   const c = useColors(theme);
 
   const handleAuthSuccess = (user: AuthResponse, stayOnLanding = false) => {
-    setRole(user.role as Role);
-    setUserId(user.user_id);
-    setProfile({
+    const nextRole = user.role as Role;
+    const nextProfile = {
       fullName: user.name,
       email: user.email,
       phone: user.phone || "",
@@ -1493,7 +1497,14 @@ export default function App() {
       risk: user.risk_tolerance || "",
       address: user.address || "",
       pan: user.pan || ""
-    });
+    };
+    setRole(nextRole);
+    setUserId(user.user_id);
+    setProfile(nextProfile);
+    window.localStorage.setItem(
+      AUTH_STORAGE_KEY,
+      JSON.stringify({ role: nextRole, userId: user.user_id, profile: nextProfile })
+    );
     if (!stayOnLanding) {
       setScreen(user.role === "admin" ? "admin" : "products");
     }
@@ -1509,6 +1520,7 @@ export default function App() {
           onThemeToggle={() => setTheme((value) => (value === "light" ? "dark" : "light"))}
           onNavigate={navigate}
           onLogout={() => {
+            window.localStorage.removeItem(AUTH_STORAGE_KEY);
             setRole("guest");
             setUserId(null);
             setProfile(EMPTY_PROFILE);
@@ -1555,3 +1567,12 @@ export default function App() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+

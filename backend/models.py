@@ -46,6 +46,7 @@ class ChatResponse(BaseModel):
     next_best_action: Optional[NextBestAction] = None
     persona: Optional[PersonaProfile] = None
     agent_decision: Optional[AgentDecision] = None
+    conversion_probability: float = 0.0
 
 class LeadScoreResponse(BaseModel):
     lead_id: str
@@ -90,9 +91,11 @@ class ConversationContext(BaseModel):
     current_product: Optional[str] = None
     agent_decisions: List[Dict[str, Any]] = Field(default_factory=list)
     qualification_complete: bool = False
+    conversion_probability: float = 0.0
 
 class AgentResponse(BaseModel):
     message: str
     agent_name: str
-    metadata: Dict[str, Any] = Field(default_factory=list)
-    state_updates: Dict[str, Any] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+    state_updates: Dict[str, Any] = Field(default_factory=dict)
+

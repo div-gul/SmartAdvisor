@@ -123,7 +123,8 @@ async def chat_endpoint(request: ChatRequest):
             lead_tier=tier,
             next_best_action=nba,
             persona=updated_context.persona,
-            agent_decision=agent_decision
+            agent_decision=agent_decision,
+            conversion_probability=conversion_prob
         )
         
     except Exception as e:

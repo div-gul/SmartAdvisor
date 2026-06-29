@@ -60,3 +60,36 @@ def calculate_lead_score(context: ConversationContext) -> tuple[int, str, str]:
         
     explanation = f"Lead score is {score} ({tier}). Factors: {', '.join(factors) if factors else 'None yet'}."
     return score, tier, explanation
+
+def calculate_conversion_probability(context: ConversationContext) -> float:
+    # Start from the deterministic lead score so ML telemetry aligns with qualification quality.
+    score, _, _ = calculate_lead_score(context)
+    prob = max(0.10, (score / 100) * 0.55)
+    
+    # Increase based on persona identification
+    if context.persona and context.persona.persona != "Unknown":
+        prob += 0.20
+        
+    # Increase based on profile completeness (name, email, phone, age, income)
+    if context.user_info:
+        info_fields = [context.user_info.name, context.user_info.email, context.user_info.phone, context.user_info.income]
+        fields_filled = sum(1 for f in info_fields if f)
+        prob += fields_filled * 0.05
+        
+    # Increase based on qualification completeness
+    if context.qualification_complete:
+        prob += 0.25
+        
+    # Increase based on engagement levels
+    user_msgs = sum(1 for m in context.messages if m.get("role") == "user")
+    prob += min(user_msgs * 0.03, 0.15)
+    
+    # Check for buying signals in last user message
+    user_messages = [m for m in context.messages if m.get("role") == "user"]
+    if user_messages:
+        last_msg = user_messages[-1].get("content", "").lower()
+        if any(x in last_msg for x in ["yes", "ok", "sure", "apply", "go ahead", "do it", "agree", "proceed"]):
+            prob = 0.99
+            
+    return min(max(prob, 0.0), 0.99)
+

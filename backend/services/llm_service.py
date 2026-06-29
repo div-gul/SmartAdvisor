@@ -32,28 +32,28 @@ def extract_context_info(messages: list[dict]) -> dict:
         full_content += content + "\n"
         
     # Extract fields using regex/substring from full_content
-    name_match = re.search(r"Name:\s*(.*)", full_content, re.IGNORECASE)
+    name_match = re.search(r"Name:[ \t]*([^\r\n]*)", full_content, re.IGNORECASE)
     if name_match:
         info["name"] = name_match.group(1).strip()
         
-    income_match = re.search(r"Income:\s*(.*)", full_content, re.IGNORECASE)
+    income_match = re.search(r"Income:[ \t]*([^\r\n]*)", full_content, re.IGNORECASE)
     if income_match:
         info["income"] = income_match.group(1).strip()
         
-    goals_match = re.search(r"Goals:\s*(.*)", full_content, re.IGNORECASE)
+    goals_match = re.search(r"Goals:[ \t]*([^\r\n]*)", full_content, re.IGNORECASE)
     if goals_match:
         info["goals"] = goals_match.group(1).strip()
         
-    occupation_match = re.search(r"Occupation:\s*(.*)", full_content, re.IGNORECASE)
+    occupation_match = re.search(r"Occupation:[ \t]*([^\r\n]*)", full_content, re.IGNORECASE)
     if occupation_match:
         info["occupation"] = occupation_match.group(1).strip()
         
-    age_match = re.search(r"Age:\s*(.*)", full_content, re.IGNORECASE)
+    age_match = re.search(r"Age:[ \t]*([^\r\n]*)", full_content, re.IGNORECASE)
     if age_match:
         info["age"] = age_match.group(1).strip()
         
-    risk_match = re.search(r"(?:risk tolerance|risk):\s*(.*)", full_content, re.IGNORECASE)
-    if risk_match:
+    risk_match = re.search(r"(?:risk tolerance|risk):[ \t]*([^\r\n]*)", full_content, re.IGNORECASE)
+    if risk_match and risk_match.group(1).strip():
         info["risk"] = risk_match.group(1).strip()
         
     persona_match = re.search(r"Persona:\s*([^|]*)", full_content, re.IGNORECASE)
@@ -63,20 +63,23 @@ def extract_context_info(messages: list[dict]) -> dict:
     # Now let's extract the actual last user input.
     # If the prompt contains the Chat History section, extract the last user message from it.
     last_msg = ""
-    history_match = re.findall(r"{'role':\s*'user',\s*'content':\s*'([^']*)'}", full_content)
-    if not history_match:
-        # Try double quotes
-        history_match = re.findall(r'{"role":\s*"user",\s*"content":\s*"([^"]*)"}', full_content)
-        
-    if history_match:
-        last_msg = history_match[-1]
-    else:
-        # Fallback to scanning lines for name/income/etc.
+    history_block_match = re.search(r"Chat History:\s*(\[.*?\])", full_content, re.DOTALL)
+    if history_block_match:
+        try:
+            import ast
+            history_list = ast.literal_eval(history_block_match.group(1))
+            user_msgs = [m for m in history_list if m.get("role") == "user"]
+            if user_msgs:
+                last_msg = user_msgs[-1].get("content", "")
+        except Exception as e:
+            logger.error(f"Error parsing history literal: {e}")
+            
+    if not last_msg:
         # Fallback to the last msg content if it's not a formatted prompt
         for msg in reversed(messages):
             if msg.get("role") == "user":
                 content = msg.get("content", "")
-                if "current state:" not in content.lower():
+                if "current state:" not in content.lower() and "chat history:" not in content.lower():
                     last_msg = content
                     break
                     
@@ -232,7 +235,7 @@ def classify_persona(info: dict, last_msg: str) -> dict:
         communication_style = "friendly"
         
     # 6. Budget Conscious Professional
-    elif "budget" in goals or "zero balance" in last_msg or "save money" in goals or "cashback" in last_msg:
+    elif "budget" in goals or "zero balance" in last_msg or "save money" in goals or "saving money" in last_msg or "save money" in last_msg or "saving" in last_msg or "cashback" in last_msg:
         persona = "Budget Conscious Professional"
         budget = "low"
         intent = "savings"
@@ -293,7 +296,7 @@ def get_mock_response(system_prompt: str, messages: list[dict]) -> str:
     target_product = classification["likely_products"][0] if classification["likely_products"] else "SBI Smart Savings"
     
     # Overwrite target product if user explicitly mentions another category
-    if "savings" in last_msg or "smart savings" in last_msg:
+    if "saving money" in last_msg or "save money" in last_msg or "savings" in last_msg or "saving" in last_msg or "smart savings" in last_msg:
         target_product = "SBI Smart Savings"
     elif "card" in last_msg or "credit" in last_msg or "elite" in last_msg:
         target_product = "SBI Elite Card"
@@ -312,6 +315,12 @@ def get_mock_response(system_prompt: str, messages: list[dict]) -> str:
 
     # 2. Sales Agent Pitching
     if "sales" in sys_lower:
+        print(f"[DEBUG SALES] sys_lower: '{sys_lower}', last_msg: '{last_msg}', target_product: '{target_product}'")
+        # Check if user shows agreement/buying signal to close the sale
+        if any(x in last_msg for x in ["yes", "ok", "sure", "apply", "go ahead", "do it", "agree", "proceed", "close", "start", "sign up"]):
+            print("[DEBUG SALES] MATCHED AGREEMENT! CLOSING SALE.")
+            return f"Excellent decision, {name_first}! I have successfully processed your application interest and closed the sale. Your conversion probability is now at 99%! Let's get your digital onboarding and KYC finalized. Please check your dashboard for the next steps!"
+            
         if target_product == "SBI Elite Card":
             return f"The SBI Elite Card offers premium lifestyle rewards like airport lounge access and points on travel. Based on your income, it's a great match. Would you like me to guide you through starting a digital application?"
         elif target_product == "SBI Mutual Fund SIP":
@@ -418,7 +427,7 @@ def get_mock_json_response(system_prompt: str, messages: list[dict]) -> dict:
             reason = "Objection detected regarding product cost/fees. Routing to Sales Agent for objection handling."
             action = "Send Discount"
             phase = "objection"
-        elif "apply" in last_msg or "start" in last_msg or "yes" in last_msg or "sure" in last_msg or "ok" in last_msg or "buy" in last_msg:
+        elif "apply now" in last_msg or "go ahead" in last_msg or "proceed" in last_msg or "buy" in last_msg or "start application" in last_msg:
             next_agent = "sales"
             reason = "User shows clear buying signal. Routing to Sales Agent to close sale."
             action = "Close Sale"
@@ -476,3 +485,7 @@ def get_mock_json_response(system_prompt: str, messages: list[dict]) -> dict:
         }
         
     return {}
+
+
+
+
