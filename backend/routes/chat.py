@@ -43,6 +43,28 @@ async def chat_endpoint(request: ChatRequest):
         # 3. Retrieve context
         context = await state_manager.get_context(lead_id)
         
+        # Integrate conversation intelligence helper functions
+        from services.conversation_intelligence import merge_user_info, infer_product_from_context
+        
+        # Merge and extract user profile details from chat
+        merged_user_info, info_changed = merge_user_info(
+            context.user_info, 
+            request.user_info, 
+            request.user_message, 
+            context
+        )
+        if info_changed:
+            await state_manager.update_context(lead_id, user_info=merged_user_info)
+            
+        # Infer current product interest dynamically from chat
+        inferred_product = infer_product_from_context(context, request.user_message)
+        if inferred_product and inferred_product != context.current_product:
+            await state_manager.update_context(lead_id, current_product=inferred_product)
+            
+        # Refresh context if updates were made
+        if info_changed or (inferred_product and inferred_product != context.current_product):
+            context = await state_manager.get_context(lead_id)
+        
         # 4. If no persona exists yet, run research first to initialize it
         if not context.persona or context.persona.persona == "Unknown":
             res_response = await research_agent.run(context)
