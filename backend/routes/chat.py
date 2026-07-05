@@ -8,7 +8,7 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 from models import ChatRequest, ChatResponse, AgentDecision, NextBestAction, PersonaProfile
 from services.state_manager import state_manager
-from services.lead_scorer import calculate_lead_score
+from services.lead_scorer import calculate_lead_score, calculate_conversion_probability
 from agents import ResearchAgent, QualificationAgent, StrategyAgent, SalesAgent, FollowUpAgent
 import database
 
@@ -86,10 +86,11 @@ async def chat_endpoint(request: ChatRequest):
         if updates:
             await state_manager.update_context(lead_id, **updates)
             
-        # 8. Recalculate lead score
+        # 8. Recalculate lead score & conversion probability
         updated_context = await state_manager.get_context(lead_id)
         score, tier, explanation = calculate_lead_score(updated_context)
-        await state_manager.update_context(lead_id, lead_score=score, lead_tier=tier)
+        conversion_prob = calculate_conversion_probability(updated_context)
+        await state_manager.update_context(lead_id, lead_score=score, lead_tier=tier, conversion_probability=conversion_prob)
         
         # 9. Add assistant response to history
         await state_manager.add_message(lead_id, "assistant", worker_response.message, agent_name=next_agent_name)
@@ -103,7 +104,8 @@ async def chat_endpoint(request: ChatRequest):
             lead_tier=tier,
             status="qualified" if updated_context.qualification_complete else "active",
             recommended_product=recommended_prod,
-            recommended_action=nba.dict()
+            recommended_action=nba.dict(),
+            conversion_probability=conversion_prob
         )
         
         # Build decision schema

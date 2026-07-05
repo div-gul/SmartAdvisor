@@ -198,7 +198,7 @@ function now() {
   return new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-const THINKING_DELAY_MS = 3000;
+const THINKING_DELAY_MS = 1000;
 
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -767,12 +767,42 @@ function TryAdvisor({
       </div>
 
       {!formStarted && (
-        <div className="flex flex-wrap gap-2">
-          {suggestions[Math.min(step, suggestions.length - 1)].map((item) => (
-            <button key={item} onClick={() => reply(item)} className="rounded-full border px-3 py-1.5 text-sm font-semibold" style={{ background: c.raised, color: c.text, borderColor: c.border }}>
-              {item}
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {suggestions[Math.min(step, suggestions.length - 1)].map((item) => (
+              <button key={item} onClick={() => reply(item)} className="rounded-full border px-3 py-1.5 text-sm font-semibold transition hover:scale-105" style={{ background: c.raised, color: c.text, borderColor: c.border }}>
+                {item}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <input 
+              type="text" 
+              placeholder="Type your reply here..." 
+              className="flex-1 rounded-full border px-4 py-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-teal-600" 
+              style={{ background: c.surface, color: c.text, borderColor: c.border }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.currentTarget.value.trim()) {
+                  reply(e.currentTarget.value.trim());
+                  e.currentTarget.value = "";
+                }
+              }}
+            />
+            <button 
+              type="button" 
+              onClick={(e) => {
+                const inputEl = e.currentTarget.previousElementSibling as HTMLInputElement;
+                if (inputEl && inputEl.value.trim()) {
+                  reply(inputEl.value.trim());
+                  inputEl.value = "";
+                }
+              }}
+              className="rounded-full px-4 py-2.5 text-sm font-bold text-white transition hover:scale-105" 
+              style={{ background: "#005B65" }}
+            >
+              Send
             </button>
-          ))}
+          </div>
         </div>
       )}
     </div>
