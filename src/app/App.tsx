@@ -353,7 +353,7 @@ function LandingPage({
       onAuthSuccess({ ...user, phone: registerPhone.trim() || user.phone });
       setMessage("Account created. Opening products.");
       setModalOpen(false);
-    } catch {
+    } catch (err: any) {
       if (modalMode === "login") {
         setMessage("Account not found. Let's create one for you.");
         setTimeout(() => {
@@ -361,7 +361,7 @@ function LandingPage({
           setRegisterName("");
         }, 850);
       } else {
-        setMessage("Could not create the account. Check the details and try again.");
+        setMessage(err.message || "Could not create the account. Check the details and try again.");
       }
     } finally {
       setLoading(false);
